@@ -111,17 +111,13 @@ export function registerHomeHandlers(app: App): void {
     },
   );
 
-  // Nominate/History/Settings aren't built yet (Phases 3, 4, 6) -- ack so
-  // clicking doesn't error out, no-op otherwise until those phases land.
+  // Nominate/History aren't built yet (Phases 4, 6) -- ack so clicking
+  // doesn't error out, no-op otherwise until those phases land. Settings is
+  // registered by registerSettingsHandlers.
   app.action(ACTION_IDS.NOMINATE_BTN, async ({ ack }) => {
     await ack();
   });
   app.action(ACTION_IDS.HISTORY_BTN, async ({ ack }) => {
     await ack();
-  });
-  app.action(ACTION_IDS.SETTINGS_BTN, async ({ ack, body, client }) => {
-    await ack();
-    const action = body as typeof body & { user: { id: string } };
-    await isAdmin(client, action.user.id); // re-checked server-side even now
   });
 }

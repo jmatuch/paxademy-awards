@@ -1,6 +1,7 @@
 export const CALLBACK_IDS = {
   HOME: "home_view",
   HOW_IT_WORKS: "how_it_works_view",
+  SETTINGS: "settings_view",
 } as const;
 
 export const ACTION_IDS = {
