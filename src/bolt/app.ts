@@ -5,6 +5,7 @@ import { registerHomeHandlers } from "../handlers/home.js";
 import { registerSettingsHandlers } from "../handlers/settings.js";
 import { registerNominateHandlers } from "../handlers/nominate.js";
 import { registerNominationMessageHandlers } from "../handlers/nominationMessage.js";
+import { registerHistoryHandlers } from "../handlers/history.js";
 
 export const receiver = new VercelReceiver({
   signingSecret: env.SLACK_SIGNING_SECRET,
@@ -25,3 +26,4 @@ registerHomeHandlers(app);
 registerSettingsHandlers(app);
 registerNominateHandlers(app);
 registerNominationMessageHandlers(app);
+registerHistoryHandlers(app);

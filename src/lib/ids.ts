@@ -5,6 +5,7 @@ export const CALLBACK_IDS = {
   NOMINATE: "nominate_view",
   NOMINATE_CONFIRM: "nominate_confirm_view",
   DELETE_CONFIRM: "delete_confirm_view",
+  HISTORY: "history_view",
 } as const;
 
 export const ACTION_IDS = {
@@ -18,6 +19,7 @@ export const ACTION_IDS = {
   AWARD_INPUT: "award_input",
   WHY_INPUT: "why_input",
   NOMINATION_OVERFLOW: "nomination_overflow",
+  HISTORY_RANGE_SELECT: "history_range_select",
 } as const;
 
 export const BLOCK_IDS = {

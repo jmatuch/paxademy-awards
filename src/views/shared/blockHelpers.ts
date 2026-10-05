@@ -3,6 +3,10 @@ export function truncate(text: string, maxLen: number): string {
   return `${text.slice(0, maxLen - 1).trimEnd()}…`;
 }
 
+export function pluralize(n: number, singular: string, plural = `${singular}s`): string {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
 export function mentionList(userIds: string[]): string {
   const mentions = userIds.map((id) => `<@${id}>`);
   if (mentions.length === 1) return mentions[0]!;

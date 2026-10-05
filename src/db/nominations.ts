@@ -1,3 +1,4 @@
+import type { DateTime } from "luxon";
 import { supabase } from "./client.js";
 
 export interface NominationRecord {
@@ -96,4 +97,66 @@ export async function softDelete(
     .eq("id", id);
 
   if (error) throw error;
+}
+
+export interface HistoryRow {
+  id: string;
+  awardName: string;
+  why: string | null;
+  nominatorUserId: string;
+  nomineeIds: string[];
+  createdAt: string;
+  votes: number;
+}
+
+async function getVotesForNominations(
+  ids: string[],
+): Promise<Map<string, number>> {
+  if (ids.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("nomination_votes")
+    .select("nomination_id, votes")
+    .in("nomination_id", ids);
+
+  if (error) throw error;
+  return new Map((data ?? []).map((d) => [d.nomination_id, d.votes]));
+}
+
+export async function listHistory(
+  teamId: string,
+  range: { start: DateTime | null; end: DateTime | null },
+  limit: number,
+): Promise<{ rows: HistoryRow[]; totalInRange: number }> {
+  let query = supabase
+    .from("nominations")
+    .select(
+      "id, award_name, why, nominator_user_id, created_at, nomination_nominees(user_id)",
+      { count: "exact" },
+    )
+    .eq("team_id", teamId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (range.start) query = query.gte("created_at", range.start.toISO());
+  if (range.end) query = query.lt("created_at", range.end.toISO());
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  const ids = (data ?? []).map((d) => d.id);
+  const votesByNomination = await getVotesForNominations(ids);
+
+  const rows: HistoryRow[] = (data ?? []).map((d) => ({
+    id: d.id,
+    awardName: d.award_name,
+    why: d.why,
+    nominatorUserId: d.nominator_user_id,
+    nomineeIds: d.nomination_nominees.map((n) => n.user_id),
+    createdAt: d.created_at,
+    votes: votesByNomination.get(d.id) ?? 0,
+  }));
+
+  return { rows, totalInRange: count ?? rows.length };
 }

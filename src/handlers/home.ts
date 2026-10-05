@@ -111,10 +111,6 @@ export function registerHomeHandlers(app: App): void {
     },
   );
 
-  // History isn't built yet (Phase 6) -- ack so clicking doesn't error out,
-  // no-op otherwise until then. Nominate/Settings are registered by
-  // registerNominateHandlers/registerSettingsHandlers.
-  app.action(ACTION_IDS.HISTORY_BTN, async ({ ack }) => {
-    await ack();
-  });
+  // Nominate/History/Settings are registered by registerNominateHandlers/
+  // registerHistoryHandlers/registerSettingsHandlers.
 }
