@@ -14,3 +14,16 @@ export async function attachNominees(
 
   if (error) throw error;
 }
+
+export async function replaceNominees(
+  nominationId: string,
+  nominees: { userId: string; displayName: string | null }[],
+): Promise<void> {
+  const { error: deleteError } = await supabase
+    .from("nomination_nominees")
+    .delete()
+    .eq("nomination_id", nominationId);
+
+  if (deleteError) throw deleteError;
+  await attachNominees(nominationId, nominees);
+}

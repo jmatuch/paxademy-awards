@@ -4,6 +4,7 @@ export const CALLBACK_IDS = {
   SETTINGS: "settings_view",
   NOMINATE: "nominate_view",
   NOMINATE_CONFIRM: "nominate_confirm_view",
+  DELETE_CONFIRM: "delete_confirm_view",
 } as const;
 
 export const ACTION_IDS = {
