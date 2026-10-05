@@ -92,17 +92,10 @@ Title for every view: `PAXademy Awards` (Slack's limit is 24 chars).
 | Field | Element | Rules |
 |---|---|---|
 | PAX | `multi_users_select` | Required, max 10 |
-| Award | `external_select`, `min_query_length: 0` | Required (see picker below) |
+| Award | `plain_text_input` | Required, max 60 chars |
 | Why | `plain_text_input`, multiline | Optional, max 500 chars |
 
-**Award picker (options handler).** Slack has no native combo box; this is the workaround.
-
-- **Empty query:** return all active standard awards, ordered by `sort_order`.
-- **Typed query:**
-  - Return standard awards matching the query (case-insensitive substring).
-  - If no award matches exactly, append a final option `✏️ Use "<query>"` with value `custom:<query>`.
-  - Trim the query and cap it at 60 chars, since Slack option text is capped at 75.
-- **Custom names are not added to the standard list.**
+Every nomination is a free-text award name. There is no curated standard-award list in v1 -- see §15 for why, and for the deferred objective/stats-based award concept.
 
 **Submit validation.** Return failures as `response_action: "errors"` so they show inline.
 
@@ -152,24 +145,6 @@ Title for every view: `PAXademy Awards` (Slack's limit is 24 chars).
   - Public channel: call `conversations.join`. The bot must be in the channel to receive reaction events.
   - Private channel: call `conversations.info`. If it returns `channel_not_found`, the bot isn't a member. Show an inline error: "Invite the app first: `/invite @PAXademy Awards` in that channel."
 - Store both `nomination_channel_id` and `nomination_channel_name`.
-
-**Manage awards**
-
-- A **Manage awards** button pushes view 3 (§4.6).
-
-### 4.6 Manage Awards (admins only)
-
-- **Award list:** one row per award with an overflow menu offering **Rename** and **Deactivate/Reactivate**.
-- **Add award:** a button that swaps in a text input via `views.update`.
-- **Deactivating** removes the award from the picker. Past nominations keep it.
-- **Renaming** does **not** change past nominations, because `award_name` is snapshotted at submit time.
-- **Seed list** (placeholders; Joe edits before launch):
-  - Best Q
-  - Best VQ
-  - Most Improved
-  - Iron PAX
-  - Mumblechatter Champion
-  - Brotherhood Award
 
 ---
 
@@ -267,22 +242,10 @@ create table settings (
   updated_at timestamptz not null default now()
 );
 
-create table awards (
-  id uuid primary key default gen_random_uuid(),
-  team_id text not null,
-  name text not null check (char_length(name) <= 60),
-  active boolean not null default true,
-  sort_order int not null default 0,
-  created_by text,
-  created_at timestamptz not null default now()
-);
-create unique index awards_team_name on awards (team_id, lower(name));
-
 create table nominations (
   id uuid primary key default gen_random_uuid(),
   team_id text not null,
-  award_id uuid references awards(id),          -- null for custom awards
-  award_name text not null,                     -- snapshot at submit/edit
+  award_name text not null,                     -- free-text, typed at submit
   why text check (char_length(why) <= 500),
   nominator_user_id text not null,
   channel_id text,
@@ -395,7 +358,7 @@ settings:
   - DST transition days,
   - the 1st of the month and Jan 1.
 - DB access goes through `src/db/*`. Handlers never build SQL inline.
-- Migrations go in `supabase/migrations/`, with the award seed in its own migration.
+- Migrations go in `supabase/migrations/`.
 
 ---
 
@@ -405,7 +368,7 @@ Stop after each phase so Joe can test in Slack.
 
 1. Supabase schema + seed. Create the Slack app from the manifest. Deploy a Vercel skeleton with signature verification.
 2. `/paxademy-awards` → Home, How it works, intro pref.
-3. Settings: channel picker, Manage Awards.
+3. Settings: channel picker.
 4. Nominate → channel post.
 5. Edit / Delete.
 6. History.
@@ -426,7 +389,7 @@ Stop after each phase so Joe can test in Slack.
 
 **Nominating, editing, deleting**
 
-- [ ] A typed custom award posts with that name and does not appear in the standard list.
+- [ ] A nomination posts with the typed award name.
 - [ ] Self-nominations and bot nominees are rejected inline.
 - [ ] The nominator can edit, and the channel message updates with "edited." Another PAX gets an ephemeral denial.
 - [ ] An admin delete removes the message, and the nomination disappears from history, recaps, and votes.
@@ -456,8 +419,6 @@ Stop after each phase so Joe can test in Slack.
 4. **Monthly recap** posts at 6am on the 1st and covers the prior month. This way the month is complete and reactions have settled a bit.
 5. **Nominator edits:** all fields, anytime, and an "edited" marker is shown.
 6. **Empty periods** get no recap post.
-7. **Custom award names** never join the standard list automatically.
-8. **Seed award list** in §4.6.
 
 ## 14. Out of scope (v1)
 
@@ -466,3 +427,35 @@ Stop after each phase so Joe can test in Slack.
 - Backfill or import of historical awards
 - App Home tab
 - Analytics
+
+## 15. Deferred: stats-based standard awards (post-launch)
+
+**Status:** Scoped but deliberately set aside after initial rollout. PAX Vault already surfaces these stats directly, so this isn't needed for v1 to ship. Revisit as a later addition, not a blocker for launch.
+
+### Mechanism
+
+If pursued, standard awards would be objectively computed from F3's PAX Vault data (BigQuery) rather than subjectively PAX-nominated, running as new monthly/yearly jobs parallel to -- not replacing -- the existing vote-based recap jobs (§7). Custom awards (subjective, free-text, created by anyone per §4.3) are unaffected either way.
+
+### Data source
+
+- Google Cloud project `f3data`, dataset `analytics`.
+- `f3data.analytics.attendance_info`: one row per PAX per event attended. Key fields: `user_id`, `event_instance_id`, `q_ind` (Q'd), `coq_ind` (co-Q'd), `f3_name`, `home_region_name` (the PAX's home region -- **not** the event's region), `start_date` (event date).
+- `f3data.analytics.event_info`: one row per event instance, joined via `attendance_info.event_instance_id = event_info.id`. Key fields: `region_name` (the event's actual region -- this is what must be filtered to scope to Wheaton, not `home_region_name`), `ao_org_id`/`ao_name` (site within the region), `vq_ind` (flags an event as someone's VQ).
+- **This dataset is national, not Wheaton-scoped.** Every query must join to `event_info` and filter on `region_name` (exact Wheaton string TBD -- see Open items).
+
+### Formulas (as scoped 2026-10-04)
+
+- **Per-AO MVP and Overall MVP** (monthly): `score = posts + Qs` for that calendar month at Wheaton events, where a co-Q (`coq_ind='1'`) counts the same as a full Q. Per-AO ranks within each `ao_name`; Overall ranks across all Wheaton events. Posted on the same monthly cadence as the existing vote-based recap, as a fully separate/parallel job.
+- **Rookie of the Year** (yearly, Jan 1 cadence alongside the existing yearly Top 3): eligible if a PAX's first-ever attendance *anywhere in F3* (any region, not just Wheaton) falls at a Wheaton event between Jan 1 and Nov 30 of that year -- this excludes transplants from other regions claiming rookie status. Ranked by average posts/month at Wheaton since their first post (Qs excluded from this metric, unlike MVP).
+- **Best VQ:** decided against as a standard award. `event_info.vq_ind` exists if ever reconsidered, but not currently planned.
+
+### Architecture notes
+
+- New jobs (e.g. `src/jobs/statsAwards.ts`) would run independently of `src/jobs/monthlyRecap.ts`/`yearlyRecap.ts` -- same posting channel, same `job_runs` idempotency pattern (§7), but querying BigQuery instead of Supabase.
+- Requires a GCP service account with read access to the `f3data` project/dataset, JSON key stored as a new Vercel env var, queried via `@google-cloud/bigquery`.
+- No changes needed to the `nominations` schema (§8) -- these would be ephemeral computed posts, not stored nominations, since no voting/editing/deleting concept applies to them.
+
+### Open items before building
+
+1. Confirm the exact `region_name` string for F3 Wheaton in `event_info` (query: `` SELECT DISTINCT region_name FROM `f3data.analytics.event_info` WHERE region_name LIKE '%heaton%' ``).
+2. Create the GCP service account and grant it BigQuery read access to the `f3data` project.
