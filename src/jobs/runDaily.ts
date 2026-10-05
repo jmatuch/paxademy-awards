@@ -23,15 +23,17 @@ export interface RunDailyParams {
   force?: JobName;
 }
 
+// Idempotency always applies, even when forced -- `force` only bypasses the
+// *schedule* gate (running on a day/time a job wouldn't naturally fire), not
+// duplicate-prevention. Otherwise two identical `force` calls (e.g. the
+// acceptance check for "two triggers on the same day post once") would post
+// twice, and a real operator re-hitting the endpoint could spam the channel.
 async function runJob(
   jobKey: string,
-  force: boolean,
   run: () => Promise<void>,
 ): Promise<JobResult> {
-  if (!force) {
-    const status = await getStatus(jobKey);
-    if (status === "ok") return "skipped";
-  }
+  const status = await getStatus(jobKey);
+  if (status === "ok") return "skipped";
   try {
     await run();
     await markOk(jobKey);
@@ -71,7 +73,7 @@ export async function runDaily(
   }
 
   if (shouldRunThisDate) {
-    results.this_date = await runJob(thisDateJobKey(now), Boolean(force), () =>
+    results.this_date = await runJob(thisDateJobKey(now), () =>
       runThisDate(client, { now, teamId: TEAM_ID, channelId }),
     );
   }
@@ -79,17 +81,13 @@ export async function runDaily(
   // Jan 1 runs monthly (December) before yearly, sequentially -- the one
   // place sub-jobs must not run concurrently (spec §7).
   if (shouldRunMonthly) {
-    results.monthly_recap = await runJob(
-      monthlyRecapJobKey(now),
-      Boolean(force),
-      () => runMonthlyRecap(client, { now, teamId: TEAM_ID, channelId }),
+    results.monthly_recap = await runJob(monthlyRecapJobKey(now), () =>
+      runMonthlyRecap(client, { now, teamId: TEAM_ID, channelId }),
     );
   }
   if (shouldRunYearly) {
-    results.yearly_top3 = await runJob(
-      yearlyTop3JobKey(now),
-      Boolean(force),
-      () => runYearlyTop3(client, { now, teamId: TEAM_ID, channelId }),
+    results.yearly_top3 = await runJob(yearlyTop3JobKey(now), () =>
+      runYearlyTop3(client, { now, teamId: TEAM_ID, channelId }),
     );
   }
 
