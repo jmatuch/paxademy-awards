@@ -46,30 +46,12 @@ export function registerHomeHandlers(app: App): void {
     // check on the Settings action itself (spec §3).
     waitUntil(
       (async () => {
-        const startedAt = Date.now();
-        try {
-          const admin = await isAdmin(client, userId);
-          console.log("[settings-pop-in]", {
-            userId,
-            admin,
-            viewId: opened.view?.id,
-            msSinceAck: Date.now() - startedAt,
-          });
-          if (!admin || !opened.view?.id) return;
-          const updateResult = await client.views.update({
-            view_id: opened.view.id,
-            view: buildHomeView({ hideIntro, isAdmin: true }),
-          });
-          console.log("[settings-pop-in] update ok", {
-            ok: updateResult.ok,
-            msTotal: Date.now() - startedAt,
-          });
-        } catch (error) {
-          console.error("[settings-pop-in] failed", {
-            msTotal: Date.now() - startedAt,
-            error,
-          });
-        }
+        const admin = await isAdmin(client, userId);
+        if (!admin || !opened.view?.id) return;
+        await client.views.update({
+          view_id: opened.view.id,
+          view: buildHomeView({ hideIntro, isAdmin: true }),
+        });
       })(),
     );
   });
