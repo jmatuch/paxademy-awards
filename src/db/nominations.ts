@@ -12,6 +12,22 @@ export interface NominationRecord {
   nomineeIds: string[];
 }
 
+export async function findByMessageRef(
+  channelId: string,
+  messageTs: string,
+): Promise<{ id: string } | null> {
+  const { data, error } = await supabase
+    .from("nominations")
+    .select("id")
+    .eq("channel_id", channelId)
+    .eq("message_ts", messageTs)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function getById(id: string): Promise<NominationRecord | null> {
   const { data, error } = await supabase
     .from("nominations")
