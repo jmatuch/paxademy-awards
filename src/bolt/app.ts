@@ -3,6 +3,8 @@ import { VercelReceiver } from "@vercel/slack-bolt";
 import { env } from "../lib/env.js";
 import { registerHomeHandlers } from "../handlers/home.js";
 import { registerSettingsHandlers } from "../handlers/settings.js";
+import { registerNominateHandlers } from "../handlers/nominate.js";
+import { registerNominationMessageHandlers } from "../handlers/nominationMessage.js";
 
 export const receiver = new VercelReceiver({
   signingSecret: env.SLACK_SIGNING_SECRET,
@@ -21,3 +23,5 @@ export const app = new App({
 
 registerHomeHandlers(app);
 registerSettingsHandlers(app);
+registerNominateHandlers(app);
+registerNominationMessageHandlers(app);
