@@ -46,12 +46,25 @@ export function registerHomeHandlers(app: App): void {
     // check on the Settings action itself (spec §3).
     waitUntil(
       (async () => {
-        const admin = await isAdmin(client, userId);
-        if (!admin || !opened.view?.id) return;
-        await client.views.update({
-          view_id: opened.view.id,
-          view: buildHomeView({ hideIntro, isAdmin: true }),
-        });
+        console.log("[settings-pop-in] background task started");
+        try {
+          const admin = await isAdmin(client, userId);
+          console.log("[settings-pop-in] isAdmin result:", admin);
+          if (!admin || !opened.view?.id) {
+            console.log("[settings-pop-in] skipping update", {
+              admin,
+              viewId: opened.view?.id,
+            });
+            return;
+          }
+          await client.views.update({
+            view_id: opened.view.id,
+            view: buildHomeView({ hideIntro, isAdmin: true }),
+          });
+          console.log("[settings-pop-in] views.update succeeded");
+        } catch (error) {
+          console.error("[settings-pop-in] background task failed:", error);
+        }
       })(),
     );
   });
