@@ -2,6 +2,7 @@ import type { App } from "@slack/bolt";
 import { waitUntil } from "@vercel/functions";
 import { ACTION_IDS, BLOCK_IDS, CALLBACK_IDS } from "../lib/ids.js";
 import { isAdmin } from "../lib/slackAuth.js";
+import { SYSTEM_USER_IDS } from "../lib/constants.js";
 import { getSettings } from "../db/settings.js";
 import {
   getById,
@@ -105,7 +106,11 @@ export function registerNominateHandlers(app: App): void {
     const nomineeInfos = await Promise.all(
       nomineeIds.map((id) => client.users.info({ user: id })),
     );
-    const botNominee = nomineeInfos.find((info) => info.user?.is_bot);
+    const botNominee = nomineeInfos.find(
+      (info) =>
+        info.user?.is_bot ||
+        (SYSTEM_USER_IDS as readonly string[]).includes(info.user?.id ?? ""),
+    );
     if (botNominee) {
       await ack({
         response_action: "errors",

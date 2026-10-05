@@ -1,4 +1,5 @@
 import type { WebClient } from "@slack/web-api";
+import { SYSTEM_USER_IDS } from "./constants.js";
 
 // Re-checked on every admin-gated action (per spec §3) -- hiding a button is
 // not authorization, so no caching here.
@@ -20,6 +21,8 @@ export async function isBotUser(
   client: WebClient,
   userId: string,
 ): Promise<boolean> {
+  if ((SYSTEM_USER_IDS as readonly string[]).includes(userId)) return true;
+
   const cached = botStatusCache.get(userId);
   if (cached !== undefined) return cached;
 
