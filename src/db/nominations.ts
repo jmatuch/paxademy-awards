@@ -1,5 +1,6 @@
-import type { DateTime } from "luxon";
+import { DateTime } from "luxon";
 import { supabase } from "./client.js";
+import { TIMEZONE } from "../lib/time.js";
 
 export interface NominationRecord {
   id: string;
@@ -123,6 +124,8 @@ export interface HistoryRow {
   nomineeIds: string[];
   createdAt: string;
   votes: number;
+  channelId?: string | null;
+  messageTs?: string | null;
 }
 
 async function getVotesForNominations(
@@ -175,4 +178,86 @@ export async function listHistory(
   }));
 
   return { rows, totalInRange: count ?? rows.length };
+}
+
+// Unlike listHistory, this returns every matching row (no cap) with votes,
+// ordered oldest-first to match the Top 3 tiebreak rule (earliest created_at
+// wins a tie). Used by the monthly/yearly recap jobs, which need the full
+// set to compute totals and rankings, not a capped display page.
+export async function listNominationsInRange(
+  teamId: string,
+  range: { start: DateTime | null; end: DateTime | null },
+): Promise<HistoryRow[]> {
+  let query = supabase
+    .from("nominations")
+    .select(
+      "id, award_name, why, nominator_user_id, channel_id, message_ts, created_at, nomination_nominees(user_id)",
+    )
+    .eq("team_id", teamId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+
+  if (range.start) query = query.gte("created_at", range.start.toISO());
+  if (range.end) query = query.lt("created_at", range.end.toISO());
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const ids = (data ?? []).map((d) => d.id);
+  const votesByNomination = await getVotesForNominations(ids);
+
+  return (data ?? []).map((d) => ({
+    id: d.id,
+    awardName: d.award_name,
+    why: d.why,
+    nominatorUserId: d.nominator_user_id,
+    nomineeIds: d.nomination_nominees.map((n) => n.user_id),
+    createdAt: d.created_at,
+    votes: votesByNomination.get(d.id) ?? 0,
+    channelId: d.channel_id,
+    messageTs: d.message_ts,
+  }));
+}
+
+export interface SimpleNomination {
+  id: string;
+  awardName: string;
+  why: string | null;
+  nominatorUserId: string;
+  nomineeIds: string[];
+  createdAt: string;
+}
+
+// Broad SQL-side filter only (team, not deleted, before the given year) --
+// the exact local month/day (and Feb 29 fallback) match happens in the
+// this_date job itself, since that's a recurring/modular match that doesn't
+// translate to a single SQL range.
+export async function listNominationsBeforeYear(
+  teamId: string,
+  year: number,
+): Promise<SimpleNomination[]> {
+  const cutoff = DateTime.fromObject({ year }, { zone: TIMEZONE }).startOf(
+    "year",
+  );
+
+  const { data, error } = await supabase
+    .from("nominations")
+    .select(
+      "id, award_name, why, nominator_user_id, created_at, nomination_nominees(user_id)",
+    )
+    .eq("team_id", teamId)
+    .is("deleted_at", null)
+    .lt("created_at", cutoff.toISO())
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((d) => ({
+    id: d.id,
+    awardName: d.award_name,
+    why: d.why,
+    nominatorUserId: d.nominator_user_id,
+    nomineeIds: d.nomination_nominees.map((n) => n.user_id),
+    createdAt: d.created_at,
+  }));
 }

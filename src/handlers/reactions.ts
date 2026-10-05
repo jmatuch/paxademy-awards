@@ -1,22 +1,7 @@
 import type { App } from "@slack/bolt";
-import type { WebClient } from "@slack/web-api";
+import { isBotUser } from "../lib/slackAuth.js";
 import { findByMessageRef } from "../db/nominations.js";
 import { deleteReaction, upsertReaction } from "../db/reactions.js";
-
-// Scoped to the warm lambda instance -- resets on cold start, which is fine,
-// it's just to cut down on repeat users.info calls within a burst of
-// reactions from the same person.
-const botStatusCache = new Map<string, boolean>();
-
-async function isBotUser(client: WebClient, userId: string): Promise<boolean> {
-  const cached = botStatusCache.get(userId);
-  if (cached !== undefined) return cached;
-
-  const result = await client.users.info({ user: userId });
-  const isBot = Boolean(result.user?.is_bot);
-  botStatusCache.set(userId, isBot);
-  return isBot;
-}
 
 export function registerReactionHandlers(app: App): void {
   app.event("reaction_added", async ({ event, client }) => {
