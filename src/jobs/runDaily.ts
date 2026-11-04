@@ -21,6 +21,12 @@ export type JobResult = "ok" | "error" | "skipped";
 export interface RunDailyParams {
   now: DateTime;
   force?: JobName;
+  // True when `now` came from a `?date=` override. Such runs get their own
+  // `test:`-prefixed job keys so a backdated/future-dated test can never
+  // consume the key a real scheduled run will need later (an Oct-5 test with
+  // date=2026-11-01 once marked monthly_recap:2026-11 done, silently skipping
+  // the real November 1 recap).
+  isDateOverride?: boolean;
 }
 
 // Idempotency always applies, even when forced -- `force` only bypasses the
@@ -49,8 +55,10 @@ async function runJob(
 
 export async function runDaily(
   client: WebClient,
-  { now, force }: RunDailyParams,
+  { now, force, isDateOverride }: RunDailyParams,
 ): Promise<Record<string, JobResult>> {
+  const key = (jobKey: string) => (isDateOverride ? `test:${jobKey}` : jobKey);
+
   if (!force && !shouldRunSixAmJob(now)) {
     return {};
   }
@@ -73,20 +81,20 @@ export async function runDaily(
   }
 
   if (shouldRunThisDate) {
-    results.this_date = await runJob(thisDateJobKey(now), () =>
+    results.this_date = await runJob(key(thisDateJobKey(now)), () =>
       runThisDate(client, { now, teamId: TEAM_ID, channelId }),
     );
   }
 
   // Jan 1 runs monthly (December) before yearly, sequentially -- the one
-  // place sub-jobs must not run concurrently (spec §7).
+  // place sub-jobs must not run concurrently (spec Â§7).
   if (shouldRunMonthly) {
-    results.monthly_recap = await runJob(monthlyRecapJobKey(now), () =>
+    results.monthly_recap = await runJob(key(monthlyRecapJobKey(now)), () =>
       runMonthlyRecap(client, { now, teamId: TEAM_ID, channelId }),
     );
   }
   if (shouldRunYearly) {
-    results.yearly_top3 = await runJob(yearlyTop3JobKey(now), () =>
+    results.yearly_top3 = await runJob(key(yearlyTop3JobKey(now)), () =>
       runYearlyTop3(client, { now, teamId: TEAM_ID, channelId }),
     );
   }

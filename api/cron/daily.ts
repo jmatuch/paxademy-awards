@@ -32,7 +32,11 @@ async function handler(req: Request): Promise<Response> {
     });
   }
 
-  const results = await runDaily(slackClient, { now, force });
+  const results = await runDaily(slackClient, {
+    now,
+    force,
+    isDateOverride: dateParam !== null,
+  });
 
   return new Response(JSON.stringify(results), {
     status: 200,
